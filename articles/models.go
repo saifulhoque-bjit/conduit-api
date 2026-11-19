@@ -96,7 +96,7 @@ func BatchGetFavoriteCounts(articleIDs []uint) map[uint]uint {
 		Count      uint
 	}
 	var results []result
-	db.Model(&FavoriteModel{}).
+	db.Table("favorite_models").
 		Select("favorite_id, COUNT(*) as count").
 		Where("favorite_id IN ?", articleIDs).
 		Group("favorite_id").
@@ -189,8 +189,7 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 		limit_int = 20
 	}
 
-	// buildQuery returns a fresh filtered query so it can be used once for the
-	// total count and once for the paginated fetch. The bool is false when the
+	// buildQuery returns the filtered query. The bool is false when the
 	// filter target (tag or user) does not exist, meaning an empty result.
 	buildQuery := func() (*gorm.DB, bool) {
 		query := db.Model(&ArticleModel{})
@@ -228,24 +227,19 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 		return query, true
 	}
 
-	countQuery, ok := buildQuery()
+	query, ok := buildQuery()
 	if !ok {
 		return models, 0, nil
 	}
+	// The page and the total share one filtered query, so the tag and user
+	// lookups run once per request instead of twice.
 	var count64 int64
-	if err := countQuery.Count(&count64).Error; err != nil {
-		return models, 0, err
-	}
-
-	fetchQuery, ok := buildQuery()
-	if !ok {
-		return models, 0, nil
-	}
-	err := fetchQuery.
+	err := query.
 		Preload("Author.UserModel").Preload("Tags").
 		Order("article_models.created_at DESC").
 		Offset(offset_int).Limit(limit_int).
-		Find(&models).Error
+		Find(&models).
+		Count(&count64).Error
 	return models, int(count64), err
 }
 
