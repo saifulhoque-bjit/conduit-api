@@ -189,7 +189,8 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 		limit_int = 20
 	}
 
-	// buildQuery returns the filtered query. The bool is false when the
+	// buildQuery returns a fresh filtered query so it can be used once for the
+	// total count and once for the paginated fetch. The bool is false when the
 	// filter target (tag or user) does not exist, meaning an empty result.
 	buildQuery := func() (*gorm.DB, bool) {
 		query := db.Model(&ArticleModel{})
@@ -227,19 +228,27 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 		return query, true
 	}
 
-	query, ok := buildQuery()
+	// SPEC: spec-dba67e
+	// The total is counted on its own query, before offset and limit: a Count
+	// chained after Offset/Limit keeps them and gives 0 for any offset above 0.
+	countQuery, ok := buildQuery()
 	if !ok {
 		return models, 0, nil
 	}
-	// The page and the total share one filtered query, so the tag and user
-	// lookups run once per request instead of twice.
 	var count64 int64
-	err := query.
+	if err := countQuery.Count(&count64).Error; err != nil {
+		return models, 0, err
+	}
+
+	fetchQuery, ok := buildQuery()
+	if !ok {
+		return models, 0, nil
+	}
+	err := fetchQuery.
 		Preload("Author.UserModel").Preload("Tags").
 		Order("article_models.created_at DESC").
 		Offset(offset_int).Limit(limit_int).
-		Find(&models).
-		Count(&count64).Error
+		Find(&models).Error
 	return models, int(count64), err
 }
 
