@@ -232,14 +232,20 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 		return models, 0, nil
 	}
 	// The page and the total share one filtered query, so the tag and user
-	// lookups run once per request instead of twice.
+	// lookups run once per request instead of twice. Session makes the query
+	// reusable, so the total is counted without the page's Order, Offset or
+	// Limit (counting after Offset/Limit returns 0 for any page but the first).
+	// SPEC: spec-2bb353
+	query = query.Session(&gorm.Session{})
 	var count64 int64
+	if err := query.Count(&count64).Error; err != nil {
+		return models, 0, err
+	}
 	err := query.
 		Preload("Author.UserModel").Preload("Tags").
 		Order("article_models.created_at DESC").
 		Offset(offset_int).Limit(limit_int).
-		Find(&models).
-		Count(&count64).Error
+		Find(&models).Error
 	return models, int(count64), err
 }
 
