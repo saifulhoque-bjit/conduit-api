@@ -1983,3 +1983,50 @@ func TestArticleUpdateSlugRaceRetries(t *testing.T) {
 	asserts.Equal(http.StatusOK, w.Code, "update should succeed after the retry")
 	asserts.Contains(w.Body.String(), `"slug":"`+newSlug)
 }
+
+// SPEC: spec-9494d4
+// Every article the API returns, alone or in a list, carries wordCount: the
+// number of whitespace-separated words in its body.
+func TestArticleWordCount(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"empty body", "", 0},
+		{"one word", "Jacobian", 1},
+		{"several spaces and newlines", "a   b\n\nc \n d", 4},
+	}
+	r := setupRouter()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			asserts := assert.New(t)
+			article, user := createArticleWithUser("Word Count Article", fmt.Sprintf("word-count-%d", common.RandInt()))
+			article.Body = tc.body
+			asserts.NoError(test_db.Model(&article).Update("body", tc.body).Error)
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest("GET", "/api/articles/"+article.Slug, nil)
+			r.ServeHTTP(w, req)
+			asserts.Equal(http.StatusOK, w.Code)
+			var single struct {
+				Article map[string]interface{} `json:"article"`
+			}
+			asserts.NoError(json.Unmarshal(w.Body.Bytes(), &single))
+			asserts.Equal(float64(tc.want), single.Article["wordCount"], "single article wordCount")
+
+			w = httptest.NewRecorder()
+			req, _ = http.NewRequest("GET", "/api/articles?author="+user.Username, nil)
+			r.ServeHTTP(w, req)
+			asserts.Equal(http.StatusOK, w.Code)
+			var list struct {
+				Articles []map[string]interface{} `json:"articles"`
+			}
+			asserts.NoError(json.Unmarshal(w.Body.Bytes(), &list))
+			if asserts.Len(list.Articles, 1) {
+				asserts.Equal(float64(tc.want), list.Articles[0]["wordCount"], "list item wordCount")
+				asserts.NotContains(list.Articles[0], "body", "list items still carry no body")
+			}
+		})
+	}
+}

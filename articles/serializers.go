@@ -2,6 +2,7 @@ package articles
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gothinkster/golang-gin-realworld-example-app/users"
@@ -57,11 +58,18 @@ type ArticleResponse struct {
 	Tags           []string              `json:"tagList"`
 	Favorite       bool                  `json:"favorited"`
 	FavoritesCount uint                  `json:"favoritesCount"`
+	WordCount      int                   `json:"wordCount"` // SPEC: spec-9494d4
 }
 
 type ArticlesSerializer struct {
 	C        *gin.Context
 	Articles []ArticleModel
+}
+
+// wordCount is the number of whitespace-separated words in an article body.
+// SPEC: spec-9494d4
+func wordCount(body string) int {
+	return len(strings.Fields(body))
 }
 
 func (s *ArticleSerializer) Response() ArticleResponse {
@@ -79,6 +87,7 @@ func (s *ArticleSerializer) Response() ArticleResponse {
 		Author:         authorSerializer.Response(),
 		Favorite:       s.isFavoriteBy(GetArticleUserModel(myUserModel)),
 		FavoritesCount: s.favoritesCount(),
+		WordCount:      wordCount(s.Body),
 	}
 	response.Tags = make([]string, 0)
 	for _, tag := range s.Tags {
@@ -102,6 +111,7 @@ type ArticleListResponse struct {
 	Tags           []string              `json:"tagList"`
 	Favorite       bool                  `json:"favorited"`
 	FavoritesCount uint                  `json:"favoritesCount"`
+	WordCount      int                   `json:"wordCount"` // SPEC: spec-9494d4
 }
 
 // ResponseWithPreloaded creates response using preloaded favorite data to avoid N+1 queries
@@ -117,6 +127,7 @@ func (s *ArticleSerializer) ResponseWithPreloaded(favorited bool, favoritesCount
 		Author:         authorSerializer.Response(),
 		Favorite:       favorited,
 		FavoritesCount: favoritesCount,
+		WordCount:      wordCount(s.Body),
 	}
 	response.Tags = make([]string, 0)
 	for _, tag := range s.Tags {
