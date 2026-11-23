@@ -183,3 +183,5 @@ Run coverage report:
 go test -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out
 ```
+
+The API contract (OpenAPI spec and example payloads) lives in [conduit-contract](https://github.com/saifulhoque-bjit/conduit-contract).
