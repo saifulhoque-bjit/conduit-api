@@ -2,6 +2,7 @@ package articles
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gothinkster/golang-gin-realworld-example-app/users"
@@ -57,6 +58,19 @@ type ArticleResponse struct {
 	Tags           []string              `json:"tagList"`
 	Favorite       bool                  `json:"favorited"`
 	FavoritesCount uint                  `json:"favoritesCount"`
+	// SPEC: spec-aabc69
+	ReadingTimeMinutes int `json:"readingTimeMinutes"`
+}
+
+// readingTimeMinutes is the body's word count divided by 200, rounded up,
+// and 1 for an empty body.
+// SPEC: spec-aabc69
+func readingTimeMinutes(body string) int {
+	words := len(strings.Fields(body))
+	if words == 0 {
+		return 1
+	}
+	return (words + 199) / 200
 }
 
 type ArticlesSerializer struct {
@@ -79,6 +93,8 @@ func (s *ArticleSerializer) Response() ArticleResponse {
 		Author:         authorSerializer.Response(),
 		Favorite:       s.isFavoriteBy(GetArticleUserModel(myUserModel)),
 		FavoritesCount: s.favoritesCount(),
+		// SPEC: spec-aabc69
+		ReadingTimeMinutes: readingTimeMinutes(s.Body),
 	}
 	response.Tags = make([]string, 0)
 	for _, tag := range s.Tags {
